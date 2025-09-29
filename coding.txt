@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Enhanced Interactive Validation Form</title>
+<style>
+  body { font-family: Arial, sans-serif; max-width: 400px; margin: 2em auto; padding: 1em; }
+  label { display: block; margin-top: 1em; }
+  input { width: 100%; padding: 0.5em; margin-top: 0.3em; border: 1px solid #ccc; border-radius: 4px; }
+  input:focus { border-color: #4a90e2; outline: none; }
+  .error-msg { color: #e74c3c; font-size: 0.9em; margin-top: 0.2em; }
+  .success-msg { color: #27ae60; font-size: 1em; margin-top: 1em; }
+  button { margin-top: 1.5em; padding: 0.7em 1.5em; background: #4a90e2; color: white; border: none; border-radius: 4px; cursor: pointer; }
+  button:disabled { background: #aaa; cursor: not-allowed; }
+  .password-strength {
+    height: 6px;
+    margin-top: 5px;
+    background-color: #ddd;
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .password-strength > div {
+    height: 100%;
+    width: 0%;
+    background-color: red;
+    transition: width 0.3s ease;
+  }
+</style>
+</head>
+<body>
+
+<h2>Signup Form</h2>
+<form id="signupForm" novalidate>
+  <label for="email">Email
+    <input type="email" id="email" name="email" required aria-describedby="emailHelp" autocomplete="email" />
+  </label>
+  <small id="emailHelp" class="error-msg"></small>
+
+  <label for="password">Password
+    <input type="password" id="password" name="password" required aria-describedby="passwordHelp" autocomplete="new-password" />
+  </label>
+  <div class="password-strength" aria-hidden="true">
+    <div id="passwordStrengthBar"></div>
+  </div>
+  <small id="passwordHelp" class="error-msg"></small>
+
+  <label for="confirmPassword">Confirm Password
+    <input type="password" id="confirmPassword" name="confirmPassword" required aria-describedby="confirmPasswordHelp" autocomplete="new-password" />
+  </label>
+  <small id="confirmPasswordHelp" class="error-msg"></small>
+
+  <button type="submit" id="submitBtn" disabled>Sign Up</button>
+  <div id="formMessage" role="alert" aria-live="polite"></div>
+</form>
+
+<script>
+// Debounce helper to limit function calls
+function debounce(func, delay) {
+  let timeout;
+  return function(...args) {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => func.apply(this, args), delay);
+  };
+}
+
+// Password strength calculation (simple)
+function calculatePasswordStrength(password) {
+  let score = 0;
+  if (password.length >= 8) score++;
+  if (/[A-Z]/.test(password)) score++;
+  if (/[a-z]/.test(password)) score++;
+  if (/\d/.test(password)) score++;
+  if (/[\W_]/.test(password)) score++; // special char
+  return score;
+}
+
+// Set password strength bar color and width
+function updatePasswordStrengthBar(strength) {
+  const bar = document.getElementById('passwordStrengthBar');
+  const percent = (strength / 5) * 100;
+  bar.style.width = percent + '%';
+  if (strength <= 2) bar.style.backgroundColor = 'red';
+  else if (strength <= 4) bar.style.backgroundColor = 'orange';
+  else bar.style.backgroundColor = 'green';
+}
+
+// Form and inputs
+const form = document.getElementById('signupForm');
+const emailInput = form.email;
+const passwordInput = form.password;
+const confirmPasswordInput = form.confirmPassword;
+const submitBtn = document.getElementById('submitBtn');
+
+const emailHelp = document.getElementById('emailHelp');
+const passwordHelp = document.getElementById('passwordHelp');
+const confirmPasswordHelp = document.getElementById('confirmPasswordHelp');
+const formMessage = document.getElementById('formMessage');
+
+// Validate email format
+function validateEmail() {
+  const value = emailInput.value.trim();
+  if (!value) {
+    emailHelp.textContent = 'Email is required.';
+    return false;
+  }
+  // Simple email regex
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(value)) {
+    emailHelp.textContent = 'Invalid email format.';
+    return false;
+  }
+  emailHelp.textContent = '';
+  return true;
+}
+
+// Validate password rules
+function validatePassword() {
+  const pwd = passwordInput.value;
+  if (!pwd) {
+    passwordHelp.textContent = 'Password is required.';
+    updatePasswordStrengthBar(0);
+    return false;
+  }
+  const strength = calculatePasswordStrength(pwd);
+  updatePasswordStrengthBar(strength);
+  if (strength < 3) {
+    passwordHelp.textContent = 'Password too weak. Use uppercase, numbers, and special characters.';
+    return false;
+  }
+  passwordHelp.textContent = '';
+  return true;
+}
+
+// Validate confirm password matches password
+function validateConfirmPassword() {
+  if (!confirmPasswordInput.value) {
+    confirmPasswordHelp.textContent = 'Please confirm your password.';
+    return false;
+  }
+  if (confirmPasswordInput.value !== passwordInput.value) {
+    confirmPasswordHelp.textContent = 'Passwords do not match.';
+    return false;
+  }
+  confirmPasswordHelp.textContent = '';
+  return true;
+}
+
+// Overall form validation
+function validateForm() {
+  const emailValid = validateEmail();
+  const passwordValid = validatePassword();
+  const confirmPwdValid = validateConfirmPassword();
+
+  const isValid = emailValid && passwordValid && confirmPwdValid;
+  submitBtn.disabled = !isValid;
+  return isValid;
+}
+
+// Debounced validation on inputs
+emailInput.addEventListener('input', debounce(validateForm, 300));
+passwordInput.addEventListener('input', debounce(validateForm, 300));
+confirmPasswordInput.addEventListener('input', debounce(validateForm, 300));
+
+// Submit handler with API call
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  formMessage.textContent = '';
+  if (!validateForm()) return;
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Submitting...';
+
+  const payload = {
+    email: emailInput.value.trim(),
+    password: passwordInput.value,
+  };
+
+  try {
+    // API call - adjust URL as needed
+    const res = await fetch('/api/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await res.json();
+    if (res.ok) {
+      formMessage.textContent = 'Signup successful! Welcome!';
+      formMessage.className = 'success-msg';
+      form.reset();
+      updatePasswordStrengthBar(0);
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Sign Up';
+    } else {
+      // Show API validation errors
+      formMessage.textContent = data.error || 'Submission failed.';
+      formMessage.className = 'error-msg';
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Sign Up';
+    }
+  } catch (error) {
+    formMessage.textContent = 'Network error. Please try again later.';
+    formMessage.className = 'error-msg';
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Sign Up';
+  }
+});
+</script>
+</body>
+</html>
